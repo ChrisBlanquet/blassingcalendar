@@ -1,0 +1,176 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Cormorant Garamond', ui-serif, Georgia, serif;
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+
+  --color-pearl: #faf7f5;
+  --color-nude: #f3e6dc;
+  --color-sand: #e8d5c4;
+  --color-blush: #f4d4d6;
+  --color-rose: #c97b84;
+  --color-rose-deep: #b36570;
+  --color-gold: #c9a36b;
+  --color-gold-soft: #e8d5a3;
+  --color-ink: #3d2b24;
+  --color-muted: #8b6f63;
+  --color-sage: #7d9b86;
+  --color-whatsapp: #25d366;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  background: #faf7f5;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: #faf7f5;
+  color: #3d2b24;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  font-size: 16px;
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.chip-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.safe-top {
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(16px, calc(env(safe-area-inset-bottom) + 10px));
+}
+
+.sheet-enter {
+  animation: sheet-up 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.inset-enter {
+  animation: inset-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes inset-in {
+  from {
+    opacity: 0.65;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fade-in 220ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-fade {
+  animation: slide-fade 300ms ease-out;
+}
+
+@keyframes slide-fade {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.wizard-next {
+  animation: wizard-next 280ms ease-out;
+}
+
+.wizard-prev {
+  animation: wizard-prev 280ms ease-out;
+}
+
+@keyframes wizard-next {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes wizard-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.alert-pop {
+  animation: alert-pop 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes alert-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
