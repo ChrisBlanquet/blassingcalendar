@@ -118,4 +118,45 @@ export function formatWeekRange(anchor) {
   return `${format(first, 'd MMM', { locale: es })} – ${format(last, 'd MMM', { locale: es })}`
 }
 
+/**
+ * Convierte minutos a un formato compacto y amigable de horas y minutos.
+ * Ejemplos:
+ *   40 -> "40 min"
+ *   60 -> "1 h"
+ *   90 -> "1 h 30 min"
+ *   120 -> "2 h"
+ */
+export function formatDuration(minutes) {
+  const m = Math.max(0, Math.round(Number(minutes) || 0))
+  if (m === 0) return '0 min'
+  if (m < 60) return `${m} min`
+  const hours = Math.floor(m / 60)
+  const remaining = m % 60
+  if (remaining === 0) {
+    return `${hours} h`
+  }
+  return `${hours} h ${remaining} min`
+}
+
+/**
+ * Convierte minutos a una frase explicativa en español.
+ * Ejemplos:
+ *   120 -> "2 horas"
+ *   60 -> "1 hora"
+ *   90 -> "1 hora 30 min"
+ *   40 -> "40 min"
+ */
+export function formatDurationWords(minutes) {
+  const m = Math.max(0, Math.round(Number(minutes) || 0))
+  if (m === 0) return '0 min'
+  if (m < 60) return `${m} min`
+  const hours = Math.floor(m / 60)
+  const remaining = m % 60
+  const hourText = hours === 1 ? '1 hora' : `${hours} horas`
+  if (remaining === 0) {
+    return hourText
+  }
+  return `${hourText} ${remaining} min`
+}
+
 export { addDays, addMonths, isSameDay, isSameMonth, isToday, startOfDay, endOfDay, startOfWeek }

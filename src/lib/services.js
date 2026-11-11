@@ -54,16 +54,29 @@ export function splitCatalog(services = []) {
 
 export function getAppointmentServices(appointment) {
   if (Array.isArray(appointment?.services) && appointment.services.length) {
-    return appointment.services
+    return appointment.services.map((item) => ({
+      ...item,
+      id: item.id || item.serviceId || 'legacy',
+      serviceId: item.serviceId || item.id || 'legacy',
+      kind: item.kind || (item.type === 'complemento' ? SERVICE_KIND.addon : SERVICE_KIND.principal),
+      type: item.type || (item.kind === SERVICE_KIND.addon ? 'complemento' : 'principal'),
+      category: item.category || 'General',
+      duration: Number(item.duration) || 0,
+      price: Number(item.customPrice ?? item.price) || 0,
+    }))
   }
-  if (appointment?.serviceName) {
+  const fallbackName = appointment?.serviceName || appointment?.serviceText || appointment?.service
+  if (fallbackName) {
     return [
       {
         id: appointment.serviceId || 'legacy',
-        name: appointment.serviceName,
-        duration: appointment.duration || 60,
-        price: appointment.total ?? 0,
+        serviceId: appointment.serviceId || 'legacy',
+        name: fallbackName,
+        duration: Number(appointment.duration) || 60,
+        price: Number(appointment.total) || 0,
         kind: SERVICE_KIND.principal,
+        type: 'principal',
+        category: 'General',
       },
     ]
   }

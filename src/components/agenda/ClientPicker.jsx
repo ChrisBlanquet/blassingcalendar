@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { InsetModal, SearchField } from '../InsetModal'
+import { InstagramIcon } from '../InstagramIcon'
 import { ClientAvatar } from './PickerRow'
+import { cleanInstagram } from '../../lib/instagram'
 import { formatPhoneDisplay, toLocalDigits } from '../../lib/phone'
 
 export function ClientPicker({ clients, onSelect, onCreateNew, onClose }) {
@@ -10,11 +12,18 @@ export function ClientPicker({ clients, onSelect, onCreateNew, onClose }) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const digits = toLocalDigits(query)
+    const cleanQ = q.replace(/^@/, '')
     if (!q) return clients
     return clients.filter((client) => {
       const name = (client.name || '').toLowerCase()
       const phone = String(client.phone || '')
-      return name.includes(q) || phone.includes(digits) || phone.includes(q)
+      const instagram = String(client.instagram || '').toLowerCase()
+      return (
+        name.includes(q) ||
+        (digits && phone.includes(digits)) ||
+        phone.includes(q) ||
+        instagram.includes(cleanQ)
+      )
     })
   }, [clients, query])
 
@@ -27,7 +36,7 @@ export function ClientPicker({ clients, onSelect, onCreateNew, onClose }) {
         <SearchField
           value={query}
           onChange={setQuery}
-          placeholder="Buscar por nombre o teléfono..."
+          placeholder="Buscar por nombre, teléfono o Instagram..."
         />
       }
     >
@@ -42,7 +51,7 @@ export function ClientPicker({ clients, onSelect, onCreateNew, onClose }) {
           </span>
           <span>
             <span className="block font-semibold">Crear nueva clienta</span>
-            <span className="block text-xs text-muted">Nombre y WhatsApp al instante</span>
+            <span className="block text-xs text-muted">Nombre y contacto al instante</span>
           </span>
         </button>
 
@@ -62,7 +71,24 @@ export function ClientPicker({ clients, onSelect, onCreateNew, onClose }) {
                   <ClientAvatar name={client.name} />
                   <span className="min-w-0">
                     <span className="block truncate font-semibold text-ink">{client.name}</span>
-                    <span className="block text-sm text-muted">{formatPhoneDisplay(client.phone)}</span>
+                    {client.phone && client.instagram ? (
+                      <span className="flex items-center gap-1.5 truncate text-sm text-muted">
+                        <span>{formatPhoneDisplay(client.phone)}</span>
+                        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-nude/70 px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                          <InstagramIcon size={11} className="shrink-0 text-muted/70" />
+                          <span className="max-w-[100px] truncate">@{cleanInstagram(client.instagram)}</span>
+                        </span>
+                      </span>
+                    ) : client.phone ? (
+                      <span className="block truncate text-sm text-muted">{formatPhoneDisplay(client.phone)}</span>
+                    ) : client.instagram ? (
+                      <span className="flex items-center gap-1 truncate text-sm text-muted">
+                        <InstagramIcon size={12} className="shrink-0 text-muted/70" />
+                        <span>@{cleanInstagram(client.instagram)}</span>
+                      </span>
+                    ) : (
+                      <span className="block text-sm italic text-muted/60">Sin datos de contacto</span>
+                    )}
                   </span>
                 </button>
               </li>

@@ -21,14 +21,20 @@ function snapMinute(minute) {
   return closest
 }
 
-export function TimeWheelSheet({ value, onSelect, onClose }) {
-  const [hours, minutes] = String(value || '10:00').split(':')
-  const [hour, setHour] = useState(HOURS.includes(pad(hours)) ? pad(hours) : '10')
-  const [minute, setMinute] = useState(snapMinute(minutes))
+export function TimeWheelSheet({
+  value,
+  onSelect,
+  onClose,
+  title = 'Hora de inicio',
+  hours = HOURS,
+}) {
+  const [hoursVal, minutesVal] = String(value || '10:00').split(':')
+  const [hour, setHour] = useState(hours.includes(pad(hoursVal)) ? pad(hoursVal) : hours[0] || '10')
+  const [minute, setMinute] = useState(snapMinute(minutesVal))
 
   return (
     <Sheet
-      title="Hora de inicio"
+      title={title}
       onClose={onClose}
       nested
       footer={
@@ -44,7 +50,7 @@ export function TimeWheelSheet({ value, onSelect, onClose }) {
       }
     >
       <div className="grid grid-cols-2 gap-3">
-        <WheelColumn label="Hora" options={HOURS} value={hour} onChange={setHour} />
+        <WheelColumn label="Hora" options={hours} value={hour} onChange={setHour} />
         <WheelColumn label="Min" options={MINUTES} value={minute} onChange={setMinute} />
       </div>
     </Sheet>

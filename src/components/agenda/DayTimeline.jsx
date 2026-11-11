@@ -1,13 +1,25 @@
-import { CalendarDays, Check } from 'lucide-react'
+import { CalendarDays, Check, Copy } from 'lucide-react'
 import { EmptyState, StatusBadge } from '../ui'
+import { InstagramIcon } from '../InstagramIcon'
 import { WhatsAppIcon } from '../WhatsAppIcon'
 import { StaffBadge } from '../staff/StaffBadge'
 import { isCancelled, isFinished } from '../../lib/appointmentStatus'
-import { formatTime, toDate } from '../../lib/dates'
+import { resolveAppointmentClient } from '../../lib/clientContact'
+import { formatDuration, formatTime, toDate } from '../../lib/dates'
+import { cleanInstagram } from '../../lib/instagram'
 import { extraLabel, serviceSummary } from '../../lib/services'
 import { resolveStaff } from '../../lib/staff'
 
-export function DayTimeline({ appointments, staff = [], onOpen, onWhatsApp, onFinalize }) {
+export function DayTimeline({
+  appointments,
+  staff = [],
+  clients = [],
+  onOpen,
+  onWhatsApp,
+  onInstagram,
+  onFinalize,
+  onCopyTemplate,
+}) {
   if (appointments.length === 0) {
     return (
       <EmptyState
@@ -32,23 +44,27 @@ export function DayTimeline({ appointments, staff = [], onOpen, onWhatsApp, onFi
           key={apt.id}
           apt={apt}
           staff={staff}
+          clients={clients}
           onOpen={() => onOpen(apt)}
           onWhatsApp={() => onWhatsApp(apt)}
+          onInstagram={() => onInstagram?.(apt)}
           onFinalize={() => onFinalize?.(apt)}
+          onCopyTemplate={onCopyTemplate}
         />
       ))}
     </div>
   )
 }
 
-function AppointmentCard({ apt, staff, onOpen, onWhatsApp, onFinalize }) {
+function AppointmentCard({ apt, staff, clients = [], onOpen, onWhatsApp, onInstagram, onFinalize, onCopyTemplate }) {
   const start = toDate(apt.startAt)
   const services = serviceSummary(apt)
   const member = resolveStaff(apt, staff)
   const duration = Number(apt.duration) || 60
   const finished = isFinished(apt.status)
   const cancelled = isCancelled(apt.status)
-  const showWhatsApp = Boolean(apt.clientPhone) && !cancelled
+
+  const { name: clientName, phone: clientPhone, hasPhone, instagramUser } = resolveAppointmentClient(apt, clients)
   const showFinalize = Boolean(onFinalize) && !finished && !cancelled
 
   return (
@@ -60,9 +76,9 @@ function AppointmentCard({ apt, staff, onOpen, onWhatsApp, onFinalize }) {
           <div className="min-w-0">
             <div className="flex items-baseline gap-2">
               <p className="font-display text-[32px] leading-none text-ink">{formatTime(start)}</p>
-              <span className="text-sm text-muted">{duration} min</span>
+              <span className="text-sm text-muted">{formatDuration(duration)}</span>
             </div>
-            <h3 className="mt-1 truncate text-[17px] font-medium text-ink">{apt.clientName}</h3>
+            <h3 className="mt-1 truncate text-[17px] font-medium text-ink">{clientName}</h3>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             <StaffBadge name={member.name} color={member.color} compact />
@@ -74,9 +90,10 @@ function AppointmentCard({ apt, staff, onOpen, onWhatsApp, onFinalize }) {
           {services.extra > 0 ? ` · ${extraLabel(services.extra, services.extraKind)}` : ''}
         </p>
       </button>
-      {showWhatsApp || showFinalize ? (
-        <div className={`grid gap-2 px-4 pb-4 ${showWhatsApp && showFinalize ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          {showWhatsApp ? (
+
+      {!cancelled ? (
+        <div className={`grid gap-2 px-4 pb-4 ${showFinalize ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {hasPhone ? (
             <button
               type="button"
               onClick={onWhatsApp}
@@ -85,7 +102,25 @@ function AppointmentCard({ apt, staff, onOpen, onWhatsApp, onFinalize }) {
               <WhatsAppIcon size={16} />
               WhatsApp
             </button>
-          ) : null}
+          ) : instagramUser ? (
+            <button
+              type="button"
+              onClick={onInstagram}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#c13584] to-[#e1306c] text-sm font-semibold text-white shadow-[0_8px_20px_rgba(225,48,108,0.25)] active:scale-[0.98]"
+            >
+              <InstagramIcon size={16} />
+              Instagram
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-sand/60 bg-nude/40 text-sm font-semibold text-muted/60 opacity-40 cursor-not-allowed"
+            >
+              Sin contacto directo
+            </button>
+          )}
+
           {showFinalize ? (
             <button
               type="button"

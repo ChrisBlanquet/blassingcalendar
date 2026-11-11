@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { LogOut } from 'lucide-react'
+import { NotificationSettings } from '../components/settings/NotificationSettings'
 import { StaffSection } from '../components/staff/StaffSection'
 import { Button, Field, TextArea, TextInput } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -76,6 +77,8 @@ export function Settings() {
           {saving ? 'Guardando…' : saved ? 'Cambios guardados' : 'Guardar configuración'}
         </Button>
       </section>
+
+      <NotificationSettings />
 
       <StaffSection />
 

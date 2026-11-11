@@ -11,11 +11,14 @@ import { DayTimeline } from '../components/agenda/DayTimeline'
 import { MonthView } from '../components/agenda/MonthView'
 import { WeekGrid } from '../components/agenda/WeekGrid'
 import { Fab } from '../components/ui'
+import { ConfirmDialog } from '../components/ios/ConfirmDialog'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { useCollection } from '../hooks/useCollection'
 import { useStaff } from '../hooks/useStaff'
 import { appointmentStaffId } from '../lib/conflicts'
-import { getAppointmentServices } from '../lib/services'
+import { copyReminderAndOpenInstagram, resolveAppointmentClient } from '../lib/clientContact'
+import { getAppointmentServices, serviceSummary } from '../lib/services'
 import {
   addDays,
   addMonths,
@@ -40,6 +43,7 @@ const views = [
 
 export function Agenda() {
   const { profile } = useAuth()
+  const { showToast } = useToast()
   const { items: appointments } = useCollection('appointments', 'startAt', 'asc')
   const { items: clients } = useCollection('clients', 'name', 'asc')
   const { items: services } = useCollection('services', 'name', 'asc')
@@ -50,6 +54,7 @@ export function Agenda() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [detailId, setDetailId] = useState(null)
   const [editor, setEditor] = useState(null)
+  const [appointmentToFinish, setAppointmentToFinish] = useState(null)
 
   const hasActiveFilters =
     filters.staffId !== 'all' || filters.status !== 'all' || filters.serviceId !== 'all'
@@ -93,21 +98,79 @@ export function Agenda() {
     setView('day')
   }
 
-  async function finalizeAppointment(appointment) {
-    if (!appointment?.id) return
+  async function handleConfirmFinish() {
+    if (!appointmentToFinish?.id) return
     const uid = requireAuthUid()
     if (!uid) return
-    await updateDoc(doc(db, 'users', uid, 'appointments', appointment.id), {
-      status: APPOINTMENT_STATUS.finished,
-    })
+
+    const targetId = appointmentToFinish.id
+    setAppointmentToFinish(null)
+
+    try {
+      await updateDoc(doc(db, 'users', uid, 'appointments', targetId), {
+        status: APPOINTMENT_STATUS.finished,
+      })
+      showToast('¡Cita concluida y agregada al historial!')
+    } catch (err) {
+      console.error('Error al finalizar la cita:', err)
+      showToast('No se pudo finalizar la cita', 'error')
+    }
   }
 
   function openWhatsApp(appointment) {
+    const { name: clientName, phone: clientPhone } = resolveAppointmentClient(appointment, clients)
+    if (!clientPhone) {
+      showToast('Sin número registrado', 'error')
+      return
+    }
     const message = fillTemplate(
       profile?.whatsappTemplate,
-      appointmentMessageVars(appointment, profile?.businessName),
+      appointmentMessageVars({ ...appointment, clientName, clientPhone }, profile?.businessName),
     )
-    openWhatsAppLink(buildWhatsAppUrl(appointment.clientPhone, message))
+    openWhatsAppLink(buildWhatsAppUrl(clientPhone, message))
+  }
+
+  async function openInstagram(appointment) {
+    await copyReminderAndOpenInstagram({
+      appointment,
+      clients,
+      template: profile?.whatsappTemplate,
+      businessName: profile?.businessName,
+      showToast,
+    })
+  }
+
+  async function copyAppointmentTemplate(appointment) {
+    const { name: clientName, phone: clientPhone } = resolveAppointmentClient(appointment, clients)
+    const message = fillTemplate(
+      profile?.whatsappTemplate,
+      appointmentMessageVars({ ...appointment, clientName, clientPhone }, profile?.businessName),
+    )
+    let copied = false
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(message)
+        copied = true
+      }
+    } catch {
+      copied = false
+    }
+    if (!copied) {
+      try {
+        const textarea = document.createElement('textarea')
+        textarea.value = message
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        textarea.remove()
+      } catch {
+        // ignore
+      }
+    }
+    showToast('Mensaje copiado al portapapeles')
   }
 
   const detailAppointment = detailId ? appointments.find((apt) => apt.id === detailId) : null
@@ -213,9 +276,12 @@ export function Agenda() {
           <DayTimeline
             appointments={dayAppointments}
             staff={staff}
+            clients={clients}
             onOpen={(apt) => setDetailId(apt.id)}
             onWhatsApp={openWhatsApp}
-            onFinalize={finalizeAppointment}
+            onInstagram={openInstagram}
+            onFinalize={(apt) => setAppointmentToFinish(apt)}
+            onCopyTemplate={copyAppointmentTemplate}
           />
         </div>
       ) : null}
@@ -236,10 +302,13 @@ export function Agenda() {
         <AppointmentDetailSheet
           appointment={detailAppointment}
           staff={staff}
+          clients={clients}
           onClose={() => setDetailId(null)}
           onEdit={() => setEditor(detailAppointment)}
           onWhatsApp={openWhatsApp}
-          onFinalize={finalizeAppointment}
+          onInstagram={openInstagram}
+          onFinalize={(apt) => setAppointmentToFinish(apt)}
+          onCopyTemplate={copyAppointmentTemplate}
         />
       ) : null}
 
@@ -265,6 +334,21 @@ export function Agenda() {
           onClose={() => setFilterOpen(false)}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(appointmentToFinish)}
+        title="¿Confirmar que la cita concluyó?"
+        message={
+          appointmentToFinish
+            ? `¿Deseas marcar la cita de ${appointmentToFinish.clientName || 'la clienta'} como finalizada? Se sumará a sus visitas completadas.`
+            : ''
+        }
+        confirmLabel="Sí, finalizar"
+        cancelLabel="Cancelar"
+        confirmTone="sage"
+        onConfirm={handleConfirmFinish}
+        onCancel={() => setAppointmentToFinish(null)}
+      />
     </div>
   )
 }

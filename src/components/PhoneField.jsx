@@ -1,17 +1,22 @@
-import { Field } from './ui'
 import { LOCAL_PHONE_LENGTH, toLocalDigits } from '../lib/phone'
 
 export function PhoneField({
   value,
   onChange,
   error = false,
+  label = 'TELÉFONO (OPCIONAL)',
   hint = 'Solo los 10 dígitos locales. El +52 de México no se edita.',
 }) {
   const local = toLocalDigits(value)
   const invalid = error || (local.length > 0 && local.length < LOCAL_PHONE_LENGTH)
 
   return (
-    <Field label="Teléfono" hint={hint}>
+    <div className="space-y-1.5">
+      {label ? (
+        <label className="block px-1 text-[11px] font-semibold tracking-wide text-muted uppercase">
+          {label}
+        </label>
+      ) : null}
       <div
         className={`flex h-12 overflow-hidden rounded-2xl border bg-white/80 shadow-sm transition ${
           invalid
@@ -35,13 +40,15 @@ export function PhoneField({
           value={local}
           onChange={(event) => onChange(toLocalDigits(event.target.value))}
           placeholder="5512345678"
-          aria-label="Teléfono local a 10 dígitos"
+          aria-label={label || 'Teléfono local a 10 dígitos'}
           className="min-w-0 flex-1 bg-transparent px-3 text-ink outline-none placeholder:text-muted/50"
         />
       </div>
       {invalid ? (
         <span className="px-1 text-xs text-rose-deep">Escribe los 10 dígitos de la clienta.</span>
+      ) : hint ? (
+        <span className="px-1 text-xs text-muted/80">{hint}</span>
       ) : null}
-    </Field>
+    </div>
   )
 }

@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Pencil, Phone, SlidersHorizontal, X } from 'lucide-react'
+import { Pencil, Phone, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { DEFAULT_HISTORY_FILTERS, HistoryFilterSheet, historyFiltersActive } from './HistoryFilterSheet'
 import { StatusBadge } from '../ui'
+import { InstagramIcon } from '../InstagramIcon'
 import { WhatsAppIcon } from '../WhatsAppIcon'
 import { StaffBadge } from '../staff/StaffBadge'
 import { isFinished } from '../../lib/appointmentStatus'
 import { appointmentMonthKey, formatMonthTitle, formatShortDate, formatTime, toDate } from '../../lib/dates'
+import { cleanInstagram, openInstagramProfile } from '../../lib/instagram'
 import { formatMoney, toNumber } from '../../lib/money'
 import { formatPhoneDisplay, isValidLocalPhone, telHref } from '../../lib/phone'
 import { extraLabel, serviceSummary } from '../../lib/services'
@@ -22,13 +24,17 @@ export function ClientProfile({
   onEdit,
   onWhatsApp,
   onOpenAppointment,
+  onDelete,
 }) {
   const stats = visitStats(appointments, client)
   const [filterOpen, setFilterOpen] = useState(false)
   const [filters, setFilters] = useState(DEFAULT_HISTORY_FILTERS)
   const phone = formatPhoneDisplay(client.phone)
+  const instagramUser = cleanInstagram(client.instagram)
   const callUrl = telHref(client.phone)
   const canWhatsApp = isValidLocalPhone(client.phone)
+  const hasPhone = Boolean(client.phone)
+  const hasInstagram = Boolean(instagramUser)
   const initial = (client.name || '?').slice(0, 1).toUpperCase()
   const hasActiveFilters = historyFiltersActive(filters)
 
@@ -72,11 +78,24 @@ export function ClientProfile({
   return createPortal(
     <div className="fixed inset-0 z-50 flex justify-center bg-ink/25">
       <section className="flex h-full w-full max-w-md flex-col bg-pearl">
-        <header className="flex shrink-0 justify-end px-4 pt-[max(12px,env(safe-area-inset-top))]">
+        <header className="flex shrink-0 items-center justify-between px-4 pt-[max(12px,env(safe-area-inset-top))]">
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => onDelete(client)}
+              className="grid h-11 w-11 place-items-center rounded-full bg-nude text-rose-deep active:scale-95 transition-transform"
+              aria-label="Eliminar clienta"
+              title="Eliminar clienta"
+            >
+              <Trash2 size={18} />
+            </button>
+          ) : (
+            <div className="h-11 w-11" />
+          )}
           <button
             type="button"
             onClick={onClose}
-            className="grid h-11 w-11 place-items-center rounded-full bg-nude text-ink"
+            className="grid h-11 w-11 place-items-center rounded-full bg-nude text-ink active:scale-95 transition-transform"
             aria-label="Cerrar"
           >
             <X size={20} />
@@ -90,21 +109,51 @@ export function ClientProfile({
             </div>
             <h2 className="mt-3 font-display text-[32px] leading-none text-ink">{client.name}</h2>
             {phone ? <p className="mt-2 text-[15px] text-muted">{phone}</p> : null}
+            {instagramUser ? (
+              <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[15px] text-muted">
+                <InstagramIcon size={15} className="text-muted/70" />
+                <span>@{instagramUser}</span>
+              </p>
+            ) : null}
+            {!phone && !instagramUser ? (
+              <p className="mt-2 text-sm italic text-muted/60">Sin datos de contacto</p>
+            ) : null}
           </div>
 
-          <div className="mb-5 grid grid-cols-3 gap-2">
-            <QuickAction
-              icon={Phone}
-              label="Llamar"
-              href={callUrl || undefined}
-              disabled={!callUrl}
-            />
-            <QuickAction
-              icon={WhatsAppIcon}
-              label="WhatsApp"
-              disabled={!canWhatsApp}
-              onClick={() => onWhatsApp?.(client)}
-            />
+          <div
+            className={`mb-5 grid gap-2 ${
+              hasPhone && hasInstagram
+                ? 'grid-cols-4'
+                : hasPhone
+                  ? 'grid-cols-3'
+                  : hasInstagram
+                    ? 'grid-cols-2'
+                    : 'grid-cols-1'
+            }`}
+          >
+            {hasPhone ? (
+              <>
+                <QuickAction
+                  icon={Phone}
+                  label="Llamar"
+                  href={callUrl || undefined}
+                  disabled={!callUrl}
+                />
+                <QuickAction
+                  icon={WhatsAppIcon}
+                  label="WhatsApp"
+                  disabled={!canWhatsApp}
+                  onClick={() => onWhatsApp?.(client)}
+                />
+              </>
+            ) : null}
+            {hasInstagram ? (
+              <QuickAction
+                icon={InstagramIcon}
+                label="Instagram"
+                onClick={() => openInstagramProfile(instagramUser)}
+              />
+            ) : null}
             <QuickAction icon={Pencil} label="Editar" onClick={onEdit} />
           </div>
 
@@ -171,7 +220,7 @@ export function ClientProfile({
   )
 }
 
-function QuickAction({ icon: Icon, label, href, onClick, disabled }) {
+function QuickAction({ icon: Icon, label, href, onClick, disabled, external = false }) {
   const className = `flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-[20px] bg-white ${
     disabled ? 'pointer-events-none opacity-40' : 'active:bg-nude/50'
   }`
@@ -185,7 +234,12 @@ function QuickAction({ icon: Icon, label, href, onClick, disabled }) {
   )
   if (href) {
     return (
-      <a href={href} className={className}>
+      <a
+        href={href}
+        className={className}
+        target={external ? '_blank' : undefined}
+        rel={external ? 'noopener noreferrer' : undefined}
+      >
         {content}
       </a>
     )

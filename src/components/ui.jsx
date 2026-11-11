@@ -110,3 +110,6 @@ export function Fab({ onClick, children }) {
     </button>
   )
 }
+
+export { Switch } from './ui/Switch'
+

@@ -12,12 +12,14 @@ import { useStaff } from '../../hooks/useStaff'
 import { userCol } from '../../hooks/useCollection'
 import { db } from '../../firebase'
 import { requireAuthUid, SESSION_EXPIRED_MESSAGE } from '../../lib/authGuard'
+import { cleanInstagram } from '../../lib/instagram'
 import { conflictMessage, findOverlappingAppointment } from '../../lib/conflicts'
 import {
   combineDateAndTime,
   computeEnd,
   dateInputValue,
   formatDayLabel,
+  formatDuration,
   formatTime,
   timeInputValue,
   toDate,
@@ -37,6 +39,7 @@ import {
 import { OWNER_STAFF_ID, resolveStaff, STAFF_COLORS } from '../../lib/staff'
 import { useCategories } from '../../hooks/useCategories'
 import { ChargeTicket } from './ChargeTicket'
+import { EditPriceSheet } from './EditPriceSheet'
 import { ClientPicker } from './ClientPicker'
 import { QuickClientSheet } from './QuickClientSheet'
 import { CompactCalendar } from './CompactCalendar'
@@ -50,10 +53,10 @@ const emptyForm = {
   staffId: OWNER_STAFF_ID,
   principalIds: [],
   addonIds: [],
+  servicePrices: {},
   date: dateInputValue(new Date()),
   time: '10:00',
   duration: 60,
-  total: '',
   deposit: '',
   notes: '',
   status: 'pending',
@@ -77,18 +80,26 @@ function formFromAppointment(appointment, initialDate) {
     return {
       ...emptyForm,
       date: dateInputValue(initialDate || new Date()),
+      servicePrices: {},
     }
   }
   const start = toDate(appointment.startAt) || new Date()
   const existing = getAppointmentServices(appointment)
+  const servicePrices = {}
+  for (const item of existing) {
+    const key = item.id || item.name
+    if (key && item.price !== undefined) {
+      servicePrices[key] = item.price
+    }
+  }
   return {
     clientId: appointment.clientId || '',
     staffId: appointment.staffId || OWNER_STAFF_ID,
     ...splitSelectedIds(existing, appointment.serviceId),
+    servicePrices,
     date: dateInputValue(start),
     time: timeInputValue(start),
     duration: toNumber(appointment.duration) || 60,
-    total: appointment.total ?? '',
     deposit: appointment.deposit ?? '',
     notes: appointment.notes || '',
     status: editorStatus(appointment.status),
@@ -109,11 +120,13 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
   const [step, setStep] = useState(0)
   const [direction, setDirection] = useState('next')
   const [confirm, confirmDialog] = useConfirm()
+  const [editingPriceItem, setEditingPriceItem] = useState(null)
 
   useEffect(() => {
     setStep(0)
     setPicker(null)
     setCreatingClient(false)
+    setEditingPriceItem(null)
     setExtraServices([])
     setExtraClients([])
     setForm(formFromAppointment(appointment, initialDate))
@@ -131,16 +144,38 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
     return [...byId.values()]
   }, [services, extraServices])
   const { principals, addons } = splitCatalog(catalog)
-  const selectedServices = [
-    ...catalog.filter((service) => (form.principalIds || []).includes(service.id)),
-    ...catalog.filter((service) => (form.addonIds || []).includes(service.id)),
-  ]
+
+  const selectedServices = useMemo(() => {
+    const rawItems = [
+      ...catalog.filter((service) => (form.principalIds || []).includes(service.id)),
+      ...catalog.filter((service) => (form.addonIds || []).includes(service.id)),
+    ]
+    return rawItems.map((service) => {
+      const key = service.id || service.name
+      const hasCustom = form.servicePrices && Object.prototype.hasOwnProperty.call(form.servicePrices, key)
+      const rawPrice = hasCustom ? form.servicePrices[key] : service.price
+      const numPrice = rawPrice === '' ? 0 : toNumber(rawPrice)
+      const baseNum = toNumber(service.price)
+      return {
+        ...service,
+        catalogPrice: baseNum,
+        price: numPrice,
+        rawPrice: rawPrice !== undefined ? rawPrice : (service.price ?? 0),
+        isCustom: hasCustom && numPrice !== baseNum,
+      }
+    })
+  }, [catalog, form.principalIds, form.addonIds, form.servicePrices])
+
+  const totalCalculated = useMemo(() => {
+    return selectedServices.reduce((acc, s) => acc + (Number(s.price) || 0), 0)
+  }, [selectedServices])
+
   const staffList = staff.length
     ? staff
     : [{ id: OWNER_STAFF_ID, name: 'Dueña', color: STAFF_COLORS[0], role: 'owner' }]
   const assignedStaff = resolveStaff({ staffId: form.staffId }, staffList)
-  const selectedPrincipals = catalog.filter((service) => (form.principalIds || []).includes(service.id))
-  const selectedAddons = catalog.filter((service) => (form.addonIds || []).includes(service.id))
+  const selectedPrincipals = selectedServices.filter((service) => (form.principalIds || []).includes(service.id))
+  const selectedAddons = selectedServices.filter((service) => (form.addonIds || []).includes(service.id))
   const principalLabel = selectedPrincipals.map((service) => service.name).join(', ')
   const addonLabel = !selectedAddons.length
     ? ''
@@ -151,13 +186,23 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
   const catalogTotals = sumServices(selectedServices)
   const duration = Math.max(1, toNumber(form.duration) || catalogTotals.duration || 60)
   const endAt = computeEnd(startAt, duration)
-  const balance = pendingBalance(form.total, form.deposit)
+  const balance = useMemo(() => pendingBalance(totalCalculated, form.deposit), [totalCalculated, form.deposit])
   const clientLabel = selectedClient?.name
 
   const canStep1 = (form.principalIds || []).length > 0 && Boolean(form.clientId)
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function handlePriceChange(serviceId, newPrice) {
+    setForm((prev) => ({
+      ...prev,
+      servicePrices: {
+        ...(prev.servicePrices || {}),
+        [serviceId]: newPrice,
+      },
+    }))
   }
 
   function applySelection(principalIds, addonIds, catalogItems = catalog) {
@@ -169,7 +214,6 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
     return {
       principalIds,
       addonIds,
-      total: totals.price,
       duration: totals.duration || 60,
     }
   }
@@ -243,34 +287,52 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
     setError('')
     try {
       const clientId = form.clientId
-      const clientName = selectedClient?.name || appointment?.clientName || ''
-      const clientPhone = selectedClient?.phone || appointment?.clientPhone || ''
+      const clientName = selectedClient ? (selectedClient.name || '') : (appointment?.clientName || '')
+      const clientPhone = selectedClient ? (selectedClient.phone || '') : (appointment?.clientPhone || '')
+      const clientInstagram = cleanInstagram(selectedClient ? (selectedClient.instagram || '') : (appointment?.clientInstagram || ''))
+
+      const joinedServiceNames = selectedServices.map((service) => service.name).join(' + ')
+      const formattedDate = form.date || dateInputValue(startAt)
 
       const payload = {
         clientId,
         clientName,
         clientPhone,
+        clientInstagram,
         staffId: assignedStaff.id,
         staffName: assignedStaff.name,
         staffColor: assignedStaff.color || STAFF_COLORS[0],
-        services: selectedServices.map((service) => ({
-          id: service.id,
-          name: service.name,
-          price: toNumber(service.price),
-          duration: toNumber(service.duration),
-          kind: serviceKind(service),
-          category: serviceCategory(service, categories),
-        })),
-        serviceId: selectedServices[0].id,
-        serviceName: selectedServices.map((service) => service.name).join(' + '),
+        services: selectedServices.map((service) => {
+          const isAddon = serviceKind(service) === SERVICE_KIND.addon
+          const cat = serviceCategory(service, categories) || 'General'
+          const finalPrice = Number(service.customPrice ?? service.price) || 0
+          return {
+            id: service.id || service.serviceId || null,
+            serviceId: service.id || service.serviceId || null,
+            name: service.name,
+            category: cat,
+            type: isAddon ? 'complemento' : 'principal',
+            kind: isAddon ? SERVICE_KIND.addon : SERVICE_KIND.principal,
+            duration: Number(service.duration) || 0,
+            price: finalPrice,
+            customPrice: finalPrice,
+          }
+        }),
+        serviceId: selectedServices[0]?.id || null,
+        serviceName: joinedServiceNames,
+        serviceText: joinedServiceNames,
+        service: joinedServiceNames,
         duration,
+        date: formattedDate,
         startAt,
+        appointmentDate: startAt,
         endAt,
-        total: toNumber(form.total),
+        total: totalCalculated,
         deposit: toNumber(form.deposit),
         balance,
         notes: form.notes.trim(),
         status: form.status,
+        updatedAt: serverTimestamp(),
       }
 
       if (appointment) {
@@ -296,11 +358,16 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
       setError(SESSION_EXPIRED_MESSAGE)
       return
     }
+    const clientName = selectedClient?.name || appointment.clientName || 'la clienta'
+    const time = form.time || (appointment.startAt ? formatTime(toDate(appointment.startAt)) : 'la hora agendada')
+
     const accepted = await confirm({
-      title: '¿Eliminar cita?',
-      message: 'Esta acción no se puede deshacer. Se liberará el horario de la agenda.',
-      confirmLabel: 'Eliminar',
+      title: '¿Eliminar cita de la agenda?',
+      message: `Esta acción no se puede deshacer. Se cancelará y borrará la cita de ${clientName} de las ${time}.`,
+      confirmLabel: 'Eliminar definitivamente',
+      cancelLabel: 'Cancelar',
       destructive: true,
+      confirmTone: 'destructive',
     })
     if (!accepted) return
     await deleteDoc(doc(db, 'users', uid, 'appointments', appointment.id))
@@ -435,9 +502,15 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
                     </span>
                   </button>
                   <div className="ml-4 h-px bg-nude" />
-                  <label className="flex min-h-14 items-center gap-3 px-4">
-                    <span className="shrink-0 text-[16px] text-ink">Duración</span>
-                    <span className="flex h-11 min-w-0 flex-1 items-center rounded-2xl bg-nude/60 px-3">
+                  <div className="flex min-h-14 items-center justify-between gap-3 px-4 py-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[16px] text-ink">Duración</span>
+                      <span className="text-xs font-semibold text-rose-deep">
+                        {formatDuration(duration)}
+                        <span className="ml-1 font-normal text-muted">({duration} min)</span>
+                      </span>
+                    </div>
+                    <label className="flex h-11 w-32 shrink-0 items-center rounded-2xl bg-nude/60 px-3 focus-within:ring-1 focus-within:ring-gold transition-all">
                       <input
                         type="number"
                         inputMode="numeric"
@@ -445,15 +518,17 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
                         step="1"
                         value={form.duration}
                         onChange={(event) => setField('duration', event.target.value)}
-                        className="h-full min-w-0 flex-1 bg-transparent text-center text-[20px] font-semibold text-ink outline-none"
+                        className="h-full min-w-0 flex-1 bg-transparent text-center text-[18px] font-semibold text-ink outline-none"
                       />
-                      <span className="pl-2 text-sm font-medium text-muted">min</span>
-                    </span>
-                  </label>
+                      <span className="pl-1 text-xs font-medium text-muted">min</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="rounded-2xl bg-nude/70 px-4 py-3 text-center text-sm text-muted">
-                  Termina aprox. a las <strong className="text-ink">{formatTime(endAt)}</strong> · {duration} min
+                  Termina aprox. a las <strong className="text-ink">{formatTime(endAt)}</strong> ·{' '}
+                  <span className="font-semibold text-ink">{formatDuration(duration)}</span>{' '}
+                  <span className="text-muted">({duration} min)</span>
                 </div>
               </div>
             ) : null}
@@ -477,30 +552,30 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Costo total" hint="Ajusta si hay extra">
+                <Field label="Anticipo (opcional)" hint="Abona al saldo de la cita">
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted select-none">
+                      $
+                    </span>
                     <TextInput
-                      className="h-11"
+                      className="h-11 pl-7"
                       type="number"
                       inputMode="decimal"
                       min="0"
-                      value={form.total}
-                      onChange={(e) => setField('total', e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Anticipo">
-                    <TextInput
-                      className="h-11"
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
+                      placeholder="0"
                       value={form.deposit}
                       onChange={(e) => setField('deposit', e.target.value)}
                     />
-                  </Field>
-                </div>
+                  </div>
+                </Field>
 
-                <ChargeTicket items={selectedServices} total={form.total} deposit={form.deposit} />
+                <ChargeTicket
+                  items={selectedServices}
+                  total={totalCalculated}
+                  deposit={form.deposit}
+                  editable
+                  onEditItemPrice={(item) => setEditingPriceItem(item)}
+                />
 
                 <Field label="Notas y referencias de diseño (opcional)">
                   <TextArea
@@ -543,9 +618,9 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
           {step === 0 ? (
             <>
               <div className="rounded-2xl bg-nude/70 px-4 py-2.5 text-center text-sm text-ink">
-                <span className="font-semibold">{catalogTotals.duration || 0} min</span>
+                <span className="font-semibold">{formatDuration(catalogTotals.duration || 0)}</span>
                 <span className="mx-2 text-muted">·</span>
-                <span className="font-semibold">{formatMoney(catalogTotals.price)}</span>
+                <span className="font-semibold">{formatMoney(totalCalculated)}</span>
               </div>
               <Button className="w-full" onClick={() => goTo(1)} disabled={!canStep1}>
                 Siguiente: Elegir horario →
@@ -564,16 +639,18 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
               </Button>
               {appointment ? (
                 <div className="flex gap-2">
-                  {appointment.clientPhone && appointment.status !== 'cancelled' ? (
+                  {selectedClient ? selectedClient.phone && appointment.status !== 'cancelled' : appointment.clientPhone && appointment.status !== 'cancelled' ? (
                     <Button
                       variant="whatsapp"
                       className="min-h-11 flex-1"
                       onClick={() => {
+                        const targetPhone = selectedClient ? (selectedClient.phone || '') : (appointment.clientPhone || '')
+                        const targetName = selectedClient ? (selectedClient.name || '') : (appointment.clientName || '')
                         const message = fillTemplate(
                           profile?.whatsappTemplate,
-                          appointmentMessageVars(appointment, profile?.businessName),
+                          appointmentMessageVars({ ...appointment, clientPhone: targetPhone, clientName: targetName }, profile?.businessName),
                         )
-                        openWhatsAppLink(buildWhatsAppUrl(appointment.clientPhone, message))
+                        openWhatsAppLink(buildWhatsAppUrl(targetPhone, message))
                       }}
                     >
                       <WhatsAppIcon size={16} />
@@ -658,6 +735,18 @@ export function AppointmentSheet({ appointment, clients, services, appointments 
           onClose={() => setPicker(null)}
           emptyText="Aún no hay complementos. Crea uno al instante o déjalo vacío."
           emptyHint="No hay coincidencias en esta categoría."
+        />
+      ) : null}
+
+      {editingPriceItem ? (
+        <EditPriceSheet
+          item={editingPriceItem}
+          basePrice={editingPriceItem.catalogPrice}
+          onClose={() => setEditingPriceItem(null)}
+          onConfirm={(newPrice) => {
+            handlePriceChange(editingPriceItem.id || editingPriceItem.name, newPrice)
+            setEditingPriceItem(null)
+          }}
         />
       ) : null}
 

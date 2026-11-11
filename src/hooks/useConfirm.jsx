@@ -12,6 +12,7 @@ export function useConfirm() {
         cancelLabel: options.cancelLabel || 'Cancelar',
         confirmLabel: options.confirmLabel || 'Confirmar',
         destructive: Boolean(options.destructive),
+        confirmTone: options.confirmTone || (options.destructive ? 'destructive' : 'primary'),
         resolve,
       })
     })
@@ -30,6 +31,7 @@ export function useConfirm() {
       cancelLabel={dialog?.cancelLabel}
       confirmLabel={dialog?.confirmLabel}
       destructive={dialog?.destructive}
+      confirmTone={dialog?.confirmTone}
       onCancel={() => close(false)}
       onConfirm={() => close(true)}
     />

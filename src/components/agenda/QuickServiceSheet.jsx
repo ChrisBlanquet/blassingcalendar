@@ -7,6 +7,7 @@ import { userCol } from '../../hooks/useCollection'
 import { useCategories } from '../../hooks/useCategories'
 import { requireAuthUid, SESSION_EXPIRED_MESSAGE } from '../../lib/authGuard'
 import { toNumber } from '../../lib/money'
+import { formatDurationWords } from '../../lib/dates'
 import {
   defaultCategoryForKind,
   SERVICE_KIND,
@@ -132,6 +133,11 @@ export function QuickServiceSheet({ defaultKind = SERVICE_KIND.principal, onCrea
               value={form.duration}
               onChange={(event) => setForm((prev) => ({ ...prev, duration: event.target.value }))}
             />
+            {form.duration ? (
+              <p className="px-1 pt-1 text-xs font-semibold text-rose-deep">
+                Equivale a: {formatDurationWords(form.duration)}
+              </p>
+            ) : null}
           </Field>
           <Field label="Precio ($)">
             <TextInput

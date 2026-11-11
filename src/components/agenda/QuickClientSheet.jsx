@@ -1,19 +1,23 @@
 import { useState } from 'react'
 import { addDoc, serverTimestamp } from 'firebase/firestore'
 import { InsetModal } from '../InsetModal'
+import { InstagramField } from '../InstagramField'
 import { PhoneField } from '../PhoneField'
 import { Button, Field, TextInput } from '../ui'
 import { userCol } from '../../hooks/useCollection'
 import { requireAuthUid, SESSION_EXPIRED_MESSAGE } from '../../lib/authGuard'
+import { cleanInstagram } from '../../lib/instagram'
 import { isValidLocalPhone, toStoredPhone } from '../../lib/phone'
 
 export function QuickClientSheet({ onCreated, onClose }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [instagram, setInstagram] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const canSave = name.trim() && isValidLocalPhone(phone)
+  const isValidPhone = !phone || isValidLocalPhone(phone)
+  const canSave = Boolean(name.trim()) && isValidPhone
 
   async function save() {
     if (!canSave) return
@@ -26,7 +30,8 @@ export function QuickClientSheet({ onCreated, onClose }) {
     setError('')
     const payload = {
       name: name.trim(),
-      phone: toStoredPhone(phone),
+      phone: phone ? toStoredPhone(phone) : '',
+      instagram: cleanInstagram(instagram),
     }
     try {
       const created = await addDoc(userCol(uid, 'clients'), {
@@ -53,19 +58,31 @@ export function QuickClientSheet({ onCreated, onClose }) {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-3.5">
         {error ? (
           <p className="rounded-2xl bg-blush/80 px-3 py-2 text-sm text-rose-deep">{error}</p>
         ) : null}
-        <Field label="Nombre">
+        <div className="space-y-1.5">
+          <label className="block px-1 text-[11px] font-semibold tracking-wide text-muted uppercase">
+            NOMBRE
+          </label>
           <TextInput
             autoFocus
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Nombre de la clienta"
           />
-        </Field>
-        <PhoneField value={phone} onChange={setPhone} />
+        </div>
+        <PhoneField
+          value={phone}
+          onChange={setPhone}
+          label="TELÉFONO (OPCIONAL)"
+        />
+        <InstagramField
+          value={instagram}
+          onChange={setInstagram}
+          label="INSTAGRAM (OPCIONAL)"
+        />
       </div>
     </InsetModal>
   )

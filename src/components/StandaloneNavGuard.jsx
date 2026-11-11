@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const EXTERNAL = /^(https?:|tel:|mailto:|sms:|whatsapp:)/i
+const EXTERNAL = /^(https?:|tel:|mailto:|sms:|whatsapp:|instagram:)/i
 
 export function StandaloneNavGuard() {
   const navigate = useNavigate()

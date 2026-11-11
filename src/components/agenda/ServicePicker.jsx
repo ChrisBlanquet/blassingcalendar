@@ -4,6 +4,7 @@ import { InsetModal, SearchField } from '../InsetModal'
 import { CategoryBadge, CategoryChips } from '../CategoryChips'
 import { Button } from '../ui'
 import { formatMoney } from '../../lib/money'
+import { formatDuration } from '../../lib/dates'
 import { useCategories } from '../../hooks/useCategories'
 import { SERVICE_KIND, serviceCategory } from '../../lib/services'
 import { QuickServiceSheet } from './QuickServiceSheet'
@@ -86,7 +87,7 @@ export function ServicePicker({
                         <span className="block truncate font-semibold text-ink">{item.name}</span>
                         <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
                           <CategoryBadge categoryId={serviceCategory(item, categories)} categories={categories} />
-                          <span>{item.duration} min</span>
+                          <span>{formatDuration(item.duration)}</span>
                           <span className="font-medium text-ink">{formatMoney(item.price)}</span>
                         </span>
                       </span>

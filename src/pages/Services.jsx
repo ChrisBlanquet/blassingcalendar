@@ -13,6 +13,7 @@ import { db } from '../firebase'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 import { requireAuthUid, SESSION_EXPIRED_MESSAGE } from '../lib/authGuard'
 import { formatMoney, toNumber } from '../lib/money'
+import { formatDuration, formatDurationWords } from '../lib/dates'
 import {
   defaultCategoryForKind,
   SERVICE_KIND,
@@ -231,7 +232,7 @@ export function Services() {
                       <div className="min-w-0 flex-1">
                         <h3 className="truncate text-[15px] font-semibold text-ink">{service.name}</h3>
                         <p className="text-[13px] text-muted">
-                          {formatMoney(service.price)} · {service.duration} min
+                          {formatMoney(service.price)} · {formatDuration(service.duration)}
                         </p>
                       </div>
                       <button
@@ -325,11 +326,16 @@ export function Services() {
                 <TextInput
                   type="number"
                   inputMode="numeric"
-                  min="15"
-                  step="15"
+                  min="1"
+                  step="5"
                   value={form.duration}
                   onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
                 />
+                {form.duration ? (
+                  <p className="px-1 pt-1 text-xs font-semibold text-rose-deep">
+                    Equivale a: {formatDurationWords(form.duration)}
+                  </p>
+                ) : null}
               </Field>
             </div>
           </div>
